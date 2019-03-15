@@ -23,11 +23,6 @@ void reset_handler(void)
 	oneint(1);
 	manyint(1, 2, 3, 4, 5, 6);
 	manyreturn(1, 2, &add, &sub, &mul, &divi, &square);
-<<<<<<< HEAD
 	while (1)
 		;
 }
-=======
-	while (1);
-}
->>>>>>> 2f64ec87eac36b04ee74515a1e896b1abca59a8b
