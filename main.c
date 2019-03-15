@@ -8,7 +8,7 @@ int manyint(int a, int b, int c, int d, int e, int f)
 	return a+b+c+d+e;
 }
 
-int manyreturn(int a, int b, int *add, int *sub, int *mul, int *divi, int *square) 
+void manyreturn(int a, int b, int *add, int *sub, int *mul, int *divi, int *square) 
 {
 	*add = a+b ;
 	*sub = a-b ;
