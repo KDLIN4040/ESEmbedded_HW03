@@ -229,3 +229,36 @@ Disassembly of section .mytext:
   e2:	e7fe      	b.n	e2 <reset_handler+0x42>
 
 ```
+從objdump我們驗證到當引數超過4個時，多餘的參數會以sp來傳輸，以manyint這個function來觀察。
+```c 
+   ...
+   int manyint(int a, int b, int c, int d, int e, int f)
+{
+    return a+b+c+d+e+f;
+}  
+   ...
+   void reset_handler(void)
+{
+    int add, sub, mul, divi, square ;
+    oneint(1);
+    manyint(1, 2, 3, 4, 5, 6);
+    manyreturn(1, 2, &add, &sub, &mul, &divi, &square);
+    while (1)
+		;
+}
+```
+再來觀察有關call manyint方程式的組語。
+```
+  ...
+  ac:	2305      	movs	r3, #5
+  ae:	9300      	str	r3, [sp, #0]
+  b0:	2306      	movs	r3, #6
+  b2:	9301      	str	r3, [sp, #4]
+  b4:	2001      	movs	r0, #1
+  b6:	2102      	movs	r1, #2
+  b8:	2203      	movs	r2, #3
+  ba:	2304      	movs	r3, #4
+  bc:	f7ff ffb2 	bl	24 <manyint>
+  ...
+``` 
+可以發現，本次傳的參數有六個，會先將5跟6這兩個參數利用**mov**指令分別存到sp跟sp+4的位置，而剩下的1,2,3,4四個參數利用r0~r3來傳遞，接著利用bl跳到manyint方程式。
