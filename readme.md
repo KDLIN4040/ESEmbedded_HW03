@@ -53,4 +53,179 @@ This is the hw03 sample. Please follow the steps below.
 
 --------------------
 
-**★★★ Please take your note here ★★★**
+# Calling Convention
+## 介紹
+當主程式呼叫子方程式時會牽扯到參數的傳遞，然而並不只是跳到子方程式地址然後再跳回來這麼簡單，主程式必須知道把參數放在哪個暫存器，子程式才能知道要去哪裡撈資料進行計算，計算完再將結果傳給主程式。
+所以規定參數傳遞方式的協定，稱為[Calling Convention。](http://daydreamman.blogspot.com/2007/01/calling-convention.html)
+而因為語言以及平台的不同，所以有很多種協定的方式，而我們使用的是STM32F7是ARM架構，而ARM架構下的Calling Convention協定又稱為**AAPCS**(ARM Architecture Procedure Call Standard)。
+
+# [AAPCS](https://en.wikipedia.org/wiki/Calling_convention)
+The standard 32-bit ARM calling convention allocates the 15 general-purpose registers as:
+* r14 is the link register. (The BL instruction, used in a subroutine call, stores the return address in this register).
+* r13 is the stack pointer. (The Push/Pop instructions in "Thumb" operating mode use this register only).
+* r12 is the Intra-Procedure-call scratch register.
+* r4 to r11: used to hold local variables.
+* r0 to r3: used to hold argument values passed to a subroutine, and also hold results returned from a subroutine.
+* The 16th register, r15, is the program counter.
+
+If the type of value returned is too large to fit in r0 to r3, or whose size cannot be determined statically at compile time, then the caller must allocate space for that value at run time, and pass a pointer to that space in r0.
+
+**Subroutines must preserve the contents of r4 to r11 and the stack pointer.** (Perhaps by saving them to the stack in the function prologue, then using them as scratch space, then restoring them from the stack in the function epilogue). In particular, subroutines that call other subroutines **must save the return address in the link register r14 to the stack before calling those other subroutines.** However, such subroutines do not need to return that value to r14—they merely need to load that value into r15, the program counter, to return.
+
+
+The ARM calling convention mandates using a **full-descending stack**.
+This calling convention causes a "typical" ARM subroutine to
+1. In the prologue, push r4 to r11 to the stack, and push the return address in r14, to the stack. (This can be done with a single STM instruction).
+2. copy any passed arguments (in r0 to r3) to the local scratch registers (r4 to r11).
+3. allocate other local variables to the remaining local scratch registers (r4 to r11).
+4. do calculations and call other subroutines as necessary using BL, assuming r0 to r3, r12 and r14 will not be preserved.
+5. put the result in r0
+6. In the epilogue, pull r4 to r11 from the stack, and pull the return address to the program counter r15. (This can be done with a single LDM instruction).
+
+## 實驗步驟
+修改main.c，增加三個方程式，單一引數跟多重引數以及回傳多值，透過objdump來驗證。
+```c 
+int oneint(int a)
+{
+    return a+a;
+}
+
+int manyint(int a, int b, int c, int d, int e, int f)
+{
+    return a+b+c+d+e+f;
+}
+
+void manyreturn(int a, int b, int *add, int *sub, int *mul, int *divi, int *square) 
+{
+    *add = a+b ;
+    *sub = a-b ;
+    *mul = a*b ;
+    *divi = a/b ;
+    *square =a^b;
+}
+void reset_handler(void)
+{
+    int add, sub, mul, divi, square ;
+    oneint(1);
+    manyint(1, 2, 3, 4, 5, 6);
+    manyreturn(1, 2, &add, &sub, &mul, &divi, &square);
+    while (1)
+		;
+}
+```
+we get following:
+
+```
+Disassembly of section .mytext:
+
+00000000 <oneint-0x8>:
+   0:	20000100 	andcs	r0, r0, r0, lsl #2
+   4:	000000a1 	andeq	r0, r0, r1, lsr #1
+
+00000008 <oneint>:
+   8:	b480      	push	{r7}
+   a:	b083      	sub	sp, #12
+   c:	af00      	add	r7, sp, #0
+   e:	6078      	str	r0, [r7, #4]
+  10:	687a      	ldr	r2, [r7, #4]
+  12:	687b      	ldr	r3, [r7, #4]
+  14:	4413      	add	r3, r2
+  16:	4618      	mov	r0, r3
+  18:	370c      	adds	r7, #12
+  1a:	46bd      	mov	sp, r7
+  1c:	f85d 7b04 	ldr.w	r7, [sp], #4
+  20:	4770      	bx	lr
+  22:	bf00      	nop
+
+00000024 <manyint>:
+  24:	b480      	push	{r7}
+  26:	b085      	sub	sp, #20
+  28:	af00      	add	r7, sp, #0
+  2a:	60f8      	str	r0, [r7, #12]
+  2c:	60b9      	str	r1, [r7, #8]
+  2e:	607a      	str	r2, [r7, #4]
+  30:	603b      	str	r3, [r7, #0]
+  32:	68fa      	ldr	r2, [r7, #12]
+  34:	68bb      	ldr	r3, [r7, #8]
+  36:	441a      	add	r2, r3
+  38:	687b      	ldr	r3, [r7, #4]
+  3a:	441a      	add	r2, r3
+  3c:	683b      	ldr	r3, [r7, #0]
+  3e:	441a      	add	r2, r3
+  40:	69bb      	ldr	r3, [r7, #24]
+  42:	4413      	add	r3, r2
+  44:	4618      	mov	r0, r3
+  46:	3714      	adds	r7, #20
+  48:	46bd      	mov	sp, r7
+  4a:	f85d 7b04 	ldr.w	r7, [sp], #4
+  4e:	4770      	bx	lr
+
+00000050 <manyreturn>:
+  50:	b480      	push	{r7}
+  52:	b085      	sub	sp, #20
+  54:	af00      	add	r7, sp, #0
+  56:	60f8      	str	r0, [r7, #12]
+  58:	60b9      	str	r1, [r7, #8]
+  5a:	607a      	str	r2, [r7, #4]
+  5c:	603b      	str	r3, [r7, #0]
+  5e:	68fa      	ldr	r2, [r7, #12]
+  60:	68bb      	ldr	r3, [r7, #8]
+  62:	441a      	add	r2, r3
+  64:	687b      	ldr	r3, [r7, #4]
+  66:	601a      	str	r2, [r3, #0]
+  68:	68fa      	ldr	r2, [r7, #12]
+  6a:	68bb      	ldr	r3, [r7, #8]
+  6c:	1ad2      	subs	r2, r2, r3
+  6e:	683b      	ldr	r3, [r7, #0]
+  70:	601a      	str	r2, [r3, #0]
+  72:	68fb      	ldr	r3, [r7, #12]
+  74:	68ba      	ldr	r2, [r7, #8]
+  76:	fb02 f203 	mul.w	r2, r2, r3
+  7a:	69bb      	ldr	r3, [r7, #24]
+  7c:	601a      	str	r2, [r3, #0]
+  7e:	68fa      	ldr	r2, [r7, #12]
+  80:	68bb      	ldr	r3, [r7, #8]
+  82:	fb92 f2f3 	sdiv	r2, r2, r3
+  86:	69fb      	ldr	r3, [r7, #28]
+  88:	601a      	str	r2, [r3, #0]
+  8a:	68fa      	ldr	r2, [r7, #12]
+  8c:	68bb      	ldr	r3, [r7, #8]
+  8e:	405a      	eors	r2, r3
+  90:	6a3b      	ldr	r3, [r7, #32]
+  92:	601a      	str	r2, [r3, #0]
+  94:	3714      	adds	r7, #20
+  96:	46bd      	mov	sp, r7
+  98:	f85d 7b04 	ldr.w	r7, [sp], #4
+  9c:	4770      	bx	lr
+  9e:	bf00      	nop
+
+000000a0 <reset_handler>:
+  a0:	b590      	push	{r4, r7, lr}
+  a2:	b08b      	sub	sp, #44	; 0x2c
+  a4:	af04      	add	r7, sp, #16
+  a6:	2001      	movs	r0, #1
+  a8:	f7ff ffae 	bl	8 <oneint>
+  ac:	2305      	movs	r3, #5
+  ae:	9300      	str	r3, [sp, #0]
+  b0:	2306      	movs	r3, #6
+  b2:	9301      	str	r3, [sp, #4]
+  b4:	2001      	movs	r0, #1
+  b6:	2102      	movs	r1, #2
+  b8:	2203      	movs	r2, #3
+  ba:	2304      	movs	r3, #4
+  bc:	f7ff ffb2 	bl	24 <manyint>
+  c0:	f107 0214 	add.w	r2, r7, #20
+  c4:	f107 0410 	add.w	r4, r7, #16
+  c8:	f107 030c 	add.w	r3, r7, #12
+  cc:	9300      	str	r3, [sp, #0]
+  ce:	f107 0308 	add.w	r3, r7, #8
+  d2:	9301      	str	r3, [sp, #4]
+  d4:	1d3b      	adds	r3, r7, #4
+  d6:	9302      	str	r3, [sp, #8]
+  d8:	2001      	movs	r0, #1
+  da:	2102      	movs	r1, #2
+  dc:	4623      	mov	r3, r4
+  de:	f7ff ffb7 	bl	50 <manyreturn>
+  e2:	e7fe      	b.n	e2 <reset_handler+0x42>
+
+```
